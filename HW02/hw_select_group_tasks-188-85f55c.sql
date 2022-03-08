@@ -99,7 +99,7 @@ TODO: select dm.DeliveryMethodName, po.ExpectedDeliveryDate, s.[SupplierName], p
 		on s.SupplierID = po.SupplierID
 	  join [Application].[People] as p
 		on p.PersonID = po.ContactPersonID
-	  where month(po.ExpectedDeliveryDate) = 1 
+	  where month(po.ExpectedDeliveryDate) = 1 and year(po.ExpectedDeliveryDate) = 2013
 	  and dm.DeliveryMethodName in ('Air Freight', 'Refrigerated Air Freight')
 	  and po.IsOrderFinalized = 1
 
