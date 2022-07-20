@@ -41,38 +41,42 @@ InvoiceMonth | Aakriti Byrraju    | Abel Spirlea       | Abel Tatarescu | ... (Ð
 -------------+--------------------+--------------------+----------------+----------------------
 */
 
-DECLARE @pivot AS NVARCHAR(MAX)
-DECLARE @ColumnName AS NVARCHAR(MAX)
+DECLARE @CustomerNames NVARCHAR(MAX);
+SET @CustomerNames =
+(
+    SELECT
+			'[' + c.CustomerName + ']' + ',' as 'data()'
+	FROM
+		(
+			SELECT DISTINCT CustomerName
+			FROM [Sales].[Customers] c
+		) c
+	FOR XML PATH ('')
+);
 
-SELECT 
-	FORMAT(s.InvoiceDate, 'dd.MM.yyyy') as InvoiceMonth, 
-	SUBSTRING( c.CustomerName, CHARINDEX('(',c.CustomerName) + 1 , LEN(c.CustomerName) - CHARINDEX('(',c.CustomerName) - 1 ) as [Client]
-INTO #clients
-FROM Sales.Customers c
-LEFT JOIN [Sales].[Invoices] s on s.CustomerID=c.CustomerID 
-	WHERE s.InvoiceDate IS NOT NULL
+IF @CustomerNames IS NOT NULL
+BEGIN
+	SET @CustomerNames = LEFT(@CustomerNames, LEN(@CustomerNames) - 1);
+END
 
-SELECT @ColumnName= ISNULL(@ColumnName + ',','') 
-       + QUOTENAME([Client]) 
-FROM (
-	SELECT  DISTINCT [Client]
-         FROM #clients
-) AS Months
-ORDER BY [Client]
+DECLARE @PivotSQL NVARCHAR(MAX) = 'SELECT 
+    InvoiceMonth, ' + @CustomerNames + '
+FROM
+    (
+    SELECT 
+        Dates.InvoiceMonth, 
+        c.CustomerName, 
+        I.InvoiceID
+    FROM Sales.Customers AS C
+    INNER JOIN Sales.Invoices AS I
+        ON I.CustomerID = C.CustomerID
+    CROSS APPLY
+        (
+            SELECT 
+            InvoiceMonth = FORMAT(DATEADD(MM, DATEDIFF(MM, 0, I.InvoiceDate), 0), ''dd.MM.yyyy'')
+        ) AS Dates
+    ) AS D PIVOT(COUNT(D.[InvoiceID]) FOR D.CustomerName IN(' + @CustomerNames + ')) AS P
+ORDER BY 
+    CAST(P.InvoiceMonth AS DATE);'
 
-SET @pivot = 
-  N'  
-	;WITH
-	PivotTab as (
-		SELECT InvoiceMonth, ' + @ColumnName + ' FROM #clients
-		PIVOT(
-		COUNT([Client])
-			   FOR Client IN (' + @ColumnName + ')
-		) AS PVTTable
-	)
-	SELECT *
-	FROM PivotTab
-	ORDER BY CAST( SUBSTRING(InvoiceMonth, 7,4) as int),  CAST( SUBSTRING(InvoiceMonth, 4,2) as int), CAST( SUBSTRING(InvoiceMonth, 0,2) as int)'
-EXEC sp_executesql @pivot;
-
-
+EXECUTE sp_executesql @PivotSQL;
